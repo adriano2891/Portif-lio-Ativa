@@ -594,6 +594,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
                             fileId={previewId || undefined}
                             coverImage={settings?.cover_image}
                             title={settings?.title || 'Pré-visualização do Vídeo'}
+                            showModeControls={true}
                           />
                         </div>
 

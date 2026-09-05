@@ -12,6 +12,7 @@ interface VideoPlayerProps {
   fileId?: string;
   onPlayRecorded?: () => void;
   autoPlayOnMount?: boolean;
+  showModeControls?: boolean;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -22,6 +23,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   fileId: propFileId,
   onPlayRecorded,
   autoPlayOnMount = false,
+  showModeControls = false,
 }) => {
   const isStaticOrNetlify = typeof window !== 'undefined' && (
     window.location.hostname.includes('netlify.app') ||
@@ -180,129 +182,145 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </video>
             ) : (
               /* Iframe do Google Drive (Modo alternativo) */
-              <iframe
-                key={`iframe-drive-${iframeKey}`}
-                id="google-drive-iframe"
-                src={previewUrl}
-                title={title || 'Vídeo do Google Drive'}
-                className="w-full h-full border-0 absolute inset-0"
-                allow="autoplay; fullscreen; encrypted-media"
-                allowFullScreen
-              />
+              <>
+                <iframe
+                  key={`iframe-drive-${iframeKey}`}
+                  id="google-drive-iframe"
+                  src={previewUrl}
+                  title={title || 'Vídeo do Google Drive'}
+                  className="w-full h-full border-0 absolute inset-0"
+                  allow="autoplay; fullscreen; encrypted-media"
+                  allowFullScreen
+                />
+                {/* Ocultar e bloquear o botão de pop-out externo [ ↗ ] do Google Drive */}
+                <div
+                  id="block-drive-popout"
+                  className="absolute top-0 right-0 w-20 h-16 bg-black z-20 pointer-events-auto cursor-default select-none rounded-tr-xl sm:rounded-tr-2xl"
+                  aria-hidden="true"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                />
+              </>
             )}
           </div>
         )}
       </div>
 
-      {/* Barra de utilidades / Card com alternador Vídeo Direto e Google Drive */}
-      <div className="w-full max-w-5xl mt-2 px-2 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          {/* Card com alternador de Modo de Reprodução */}
-          {canUseStream && (
-            <div className="flex items-center gap-1 bg-slate-900/80 border border-white/10 rounded-md p-0.5 shadow-sm">
+      {/* Barra de utilidades / Card com alternador Vídeo Direto e Google Drive (Oculto no link de reprodução público) */}
+      {showModeControls && (
+        <>
+          <div className="w-full max-w-5xl mt-2 px-2 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {/* Card com alternador de Modo de Reprodução */}
+              {canUseStream && (
+                <div className="flex items-center gap-1 bg-slate-900/80 border border-white/10 rounded-md p-0.5 shadow-sm">
+                  <button
+                    type="button"
+                    id="btn-mode-stream"
+                    onClick={() => {
+                      setStreamError(false);
+                      setPlayerMode('stream');
+                      if (!isPlaying) {
+                        handleStartPlay();
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                      activeMode === 'stream'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Reprodução direta HTML5 nativa"
+                  >
+                    <Film className="w-3.5 h-3.5" />
+                    <span>Vídeo Direto</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-mode-iframe"
+                    onClick={() => {
+                      setPlayerMode('iframe');
+                      if (!isPlaying) {
+                        handleStartPlay();
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                      activeMode === 'iframe'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Player Padrão do Google Drive"
+                  >
+                    <MonitorPlay className="w-3.5 h-3.5" />
+                    <span>Google Drive</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Botão de recarregar player */}
+              {isPlaying && (
+                <button
+                  onClick={handleReload}
+                  id="btn-reload-video"
+                  className="hover:text-slate-200 transition-colors flex items-center gap-1.5 bg-slate-900/60 border border-white/5 px-2.5 py-1 rounded-md text-slate-400"
+                  title="Recarregar player"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Recarregar player</span>
+                </button>
+              )}
+
+              {/* Ajuste de Enquadramento (Ajustar vs Preencher) no modo direto */}
+              {isPlaying && activeMode === 'stream' && (
+                <div className="flex items-center gap-1 bg-slate-900/80 border border-white/10 rounded-md p-0.5">
+                  <button
+                    type="button"
+                    id="btn-fit-contain"
+                    onClick={() => setVideoFit('contain')}
+                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                      videoFit === 'contain'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Ajustar vídeo inteiro na tela (sem cortes)"
+                  >
+                    Ajustar
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-fit-cover"
+                    onClick={() => setVideoFit('cover')}
+                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                      videoFit === 'cover'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Preencher o quadro do reprodutor"
+                  >
+                    Preencher
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Alerta caso o streaming direto falhe */}
+          {streamError && canUseStream && (
+            <div className="w-full max-w-5xl mt-2 p-3 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between">
+              <span>O streaming direto não pôde ser carregado. Exibindo via player do Google Drive.</span>
               <button
-                type="button"
-                id="btn-mode-stream"
                 onClick={() => {
                   setStreamError(false);
                   setPlayerMode('stream');
-                  if (!isPlaying) {
-                    handleStartPlay();
-                  }
                 }}
-                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
-                  activeMode === 'stream'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Reprodução direta HTML5 nativa"
+                className="underline hover:text-white ml-2"
               >
-                <Film className="w-3.5 h-3.5" />
-                <span>Vídeo Direto</span>
-              </button>
-              <button
-                type="button"
-                id="btn-mode-iframe"
-                onClick={() => {
-                  setPlayerMode('iframe');
-                  if (!isPlaying) {
-                    handleStartPlay();
-                  }
-                }}
-                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
-                  activeMode === 'iframe'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Player Padrão do Google Drive"
-              >
-                <MonitorPlay className="w-3.5 h-3.5" />
-                <span>Google Drive</span>
+                Tentar direto novamente
               </button>
             </div>
           )}
-
-          {/* Botão de recarregar player */}
-          {isPlaying && (
-            <button
-              onClick={handleReload}
-              id="btn-reload-video"
-              className="hover:text-slate-200 transition-colors flex items-center gap-1.5 bg-slate-900/60 border border-white/5 px-2.5 py-1 rounded-md text-slate-400"
-              title="Recarregar player"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Recarregar player</span>
-            </button>
-          )}
-
-          {/* Ajuste de Enquadramento (Ajustar vs Preencher) no modo direto */}
-          {isPlaying && activeMode === 'stream' && (
-            <div className="flex items-center gap-1 bg-slate-900/80 border border-white/10 rounded-md p-0.5">
-              <button
-                type="button"
-                id="btn-fit-contain"
-                onClick={() => setVideoFit('contain')}
-                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
-                  videoFit === 'contain'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Ajustar vídeo inteiro na tela (sem cortes)"
-              >
-                Ajustar
-              </button>
-              <button
-                type="button"
-                id="btn-fit-cover"
-                onClick={() => setVideoFit('cover')}
-                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
-                  videoFit === 'cover'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Preencher o quadro do reprodutor"
-              >
-                Preencher
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Alerta caso o streaming direto falhe */}
-      {streamError && canUseStream && (
-        <div className="w-full max-w-5xl mt-2 p-3 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between">
-          <span>O streaming direto não pôde ser carregado. Exibindo via player do Google Drive.</span>
-          <button
-            onClick={() => {
-              setStreamError(false);
-              setPlayerMode('stream');
-            }}
-            className="underline hover:text-white ml-2"
-          >
-            Tentar direto novamente
-          </button>
-        </div>
+        </>
       )}
 
       {/* Aviso amigável sobre permissão do Google Drive (Requisito 4) */}
