@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Play, AlertCircle, RefreshCw, Film, MonitorPlay } from 'lucide-react';
 import { trackEvent, API_BASE } from '../services/api';
 import { parseGoogleDriveVideoUrl } from '../utils/googleDrive';
 import { normalizeImageUrl } from '../utils/imageUrl';
+import { VideoControls } from './VideoControls';
 
 interface VideoPlayerProps {
   previewUrl: string;
@@ -33,16 +34,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     (!API_BASE && window.location.port !== '3000')
   );
 
-  const [isPlaying, setIsPlaying] = useState(autoPlayOnMount);
+  // Estado de início da reprodução
+  const [hasStarted, setHasStarted] = useState(autoPlayOnMount);
+  const [isVideoPaused, setIsVideoPaused] = useState(true);
   const [showPermissionHelp, setShowPermissionHelp] = useState(false);
   const [streamError, setStreamError] = useState(false);
-  const [playerMode, setPlayerMode] = useState<'stream' | 'iframe'>(() => {
-    return isStaticOrNetlify ? 'iframe' : 'stream';
-  });
+  const [playerMode, setPlayerMode] = useState<'stream' | 'iframe'>('stream');
   const [iframeKey, setIframeKey] = useState(0);
+
+  // Proporção de tela e enquadramento
   const [detectedRatio, setDetectedRatio] = useState<'9-16' | '16-9' | '1-1'>('9-16');
   const [videoFit, setVideoFit] = useState<'contain' | 'cover'>('contain');
+
+  // Controles do reprodutor customizado
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [bufferedEnd, setBufferedEnd] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+
+  // Referências
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const verticalFrameRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Detectar resolução da imagem de capa para identificar vídeo 9:16 antecipadamente
   useEffect(() => {
@@ -67,32 +85,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [coverImage]);
 
-  // Detectar a resolução intrínseca do vídeo quando o arquivo carregar metadados
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      const { videoWidth, videoHeight } = videoRef.current;
-      if (videoWidth && videoHeight) {
-        const ratio = videoWidth / videoHeight;
-        if (ratio < 0.75) {
-          setDetectedRatio('9-16');
-        } else if (ratio >= 0.75 && ratio <= 1.2) {
-          setDetectedRatio('1-1');
-        } else {
-          setDetectedRatio('16-9');
-        }
-      }
-    }
-  };
-
-  const effectiveRatio = React.useMemo(() => {
-    if (aspectRatioProp === '9:16') return '9-16';
-    if (aspectRatioProp === '16:9') return '16-9';
-    if (aspectRatioProp === '1:1') return '1-1';
-    return detectedRatio;
-  }, [aspectRatioProp, detectedRatio]);
-
-  const isVertical = effectiveRatio === '9-16';
-
   // Extrair ID do arquivo se não tiver sido passado explicitamente
   const resolvedFileId = React.useMemo(() => {
     if (propFileId) return propFileId;
@@ -107,31 +99,239 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return null;
   }, [propFileId, originalUrl, previewUrl]);
 
-  // Se houver resolvedFileId, habilita a opção de Vídeo Direto
-  const canUseStream = Boolean(resolvedFileId);
-  const activeMode = canUseStream && !streamError ? playerMode : 'iframe';
-  const directStreamUrl = resolvedFileId ? `${API_BASE}/api/public/video-stream/${resolvedFileId}` : '';
+  // Proporção efetiva
+  const effectiveRatio = React.useMemo(() => {
+    if (aspectRatioProp === '9:16') return '9-16';
+    if (aspectRatioProp === '16:9') return '16-9';
+    if (aspectRatioProp === '1:1') return '1-1';
+    return detectedRatio;
+  }, [aspectRatioProp, detectedRatio]);
 
+  const isVertical = effectiveRatio === '9-16';
+
+  // URLs de streaming direto do vídeo
+  const primaryStreamUrl = React.useMemo(() => {
+    if (originalUrl && (originalUrl.endsWith('.mp4') || originalUrl.endsWith('.webm') || originalUrl.endsWith('.mov'))) {
+      return originalUrl;
+    }
+    if (!resolvedFileId) return '';
+    if (isStaticOrNetlify) {
+      return `https://drive.usercontent.google.com/download?id=${resolvedFileId}&export=download&confirm=t`;
+    }
+    return `${API_BASE}/api/public/video-stream/${resolvedFileId}`;
+  }, [originalUrl, resolvedFileId, isStaticOrNetlify]);
+
+  const fallbackDriveCdnUrl = resolvedFileId
+    ? `https://drive.usercontent.google.com/download?id=${resolvedFileId}&export=download&confirm=t`
+    : '';
+
+  // Temporizador de Ocultação Automática dos Controles (3 segundos sem interação)
+  const resetAutoHideTimer = useCallback(() => {
+    setControlsVisible(true);
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    // Ocultar após 3 segundos somente se o vídeo estiver em reprodução ativa
+    if (videoRef.current && !videoRef.current.paused) {
+      hideTimerRef.current = setTimeout(() => {
+        setControlsVisible(false);
+      }, 3000);
+    }
+  }, []);
+
+  // Monitorar estado de fullscreen
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Iniciar Reprodução
   const handleStartPlay = () => {
-    setIsPlaying(true);
+    setHasStarted(true);
     setStreamError(false);
+    setIsVideoPaused(false);
 
-    // Registrar métrica de reprodução no banco persistente
     trackEvent('video_play');
     if (onPlayRecorded) {
       onPlayRecorded();
     }
 
-    // Iniciar vídeo nativo após renderizar
     setTimeout(() => {
       if (videoRef.current) {
-        videoRef.current.play().catch((err) => {
-          console.warn('Autoplay bloqueado pelo navegador, aguardando interação:', err);
+        videoRef.current.play().then(() => {
+          setIsVideoPaused(false);
+          resetAutoHideTimer();
+        }).catch((err) => {
+          console.warn('Autoplay bloqueado pelo navegador, aguardando toque:', err);
+          setIsVideoPaused(true);
+          setControlsVisible(true);
         });
       }
     }, 100);
   };
 
+  // Alternar Play/Pause
+  const togglePlay = useCallback(() => {
+    if (!videoRef.current) return;
+    if (videoRef.current.paused) {
+      videoRef.current.play().then(() => {
+        setIsVideoPaused(false);
+        resetAutoHideTimer();
+      }).catch(console.warn);
+    } else {
+      videoRef.current.pause();
+      setIsVideoPaused(true);
+      // Quando pausado, os controles devem permanecer visíveis
+      setControlsVisible(true);
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+    }
+  }, [resetAutoHideTimer]);
+
+  // Clique na área do vídeo (Mobile e Desktop)
+  const handleVideoAreaClick = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    // Se os controles estavam ocultos, apenas exibe os controles e reinicia o temporizador de 3s
+    if (!controlsVisible) {
+      resetAutoHideTimer();
+      return;
+    }
+    // Se os controles já estavam visíveis, alternar reprodução/pausa
+    togglePlay();
+  };
+
+  // Avançar / retroceder no tempo
+  const handleSeek = (time: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+      setCurrentTime(time);
+      resetAutoHideTimer();
+    }
+  };
+
+  // Pular segundos (+10s ou -10s)
+  const handleSkip = (seconds: number) => {
+    if (videoRef.current) {
+      const targetTime = Math.max(0, Math.min(videoRef.current.currentTime + seconds, duration || 0));
+      videoRef.current.currentTime = targetTime;
+      setCurrentTime(targetTime);
+      resetAutoHideTimer();
+    }
+  };
+
+  // Ajuste de Volume
+  const handleVolumeChange = (newVolume: number) => {
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume;
+      setVolume(newVolume);
+      if (newVolume > 0 && isMuted) {
+        videoRef.current.muted = false;
+        setIsMuted(false);
+      }
+      resetAutoHideTimer();
+    }
+  };
+
+  // Alternar Mudo
+  const handleToggleMute = () => {
+    if (videoRef.current) {
+      const nextMuted = !videoRef.current.muted;
+      videoRef.current.muted = nextMuted;
+      setIsMuted(nextMuted);
+      resetAutoHideTimer();
+    }
+  };
+
+  // Alterar Velocidade
+  const handlePlaybackRateChange = (rate: number) => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+      setPlaybackRate(rate);
+      resetAutoHideTimer();
+    }
+  };
+
+  // Alternar Tela Cheia
+  const handleToggleFullscreen = () => {
+    const targetElement = isVertical 
+      ? (verticalFrameRef.current || containerRef.current)
+      : containerRef.current;
+
+    if (!targetElement) return;
+
+    if (!document.fullscreenElement) {
+      if (targetElement.requestFullscreen) {
+        targetElement.requestFullscreen().catch(console.warn);
+      } else if ((targetElement as any).webkitRequestFullscreen) {
+        (targetElement as any).webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(console.warn);
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      }
+    }
+    resetAutoHideTimer();
+  };
+
+  // Metadados carregados
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration || 0);
+      const { videoWidth, videoHeight } = videoRef.current;
+      if (videoWidth && videoHeight) {
+        const ratio = videoWidth / videoHeight;
+        if (ratio < 0.75) {
+          setDetectedRatio('9-16');
+        } else if (ratio >= 0.75 && ratio <= 1.2) {
+          setDetectedRatio('1-1');
+        } else {
+          setDetectedRatio('16-9');
+        }
+      }
+    }
+  };
+
+  // Atualização contínua de tempo e buffer
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+      if (videoRef.current.buffered.length > 0) {
+        setBufferedEnd(videoRef.current.buffered.end(videoRef.current.buffered.length - 1));
+      }
+    }
+  };
+
+  // Tratamento de Erro do Vídeo
+  const handleVideoError = () => {
+    console.warn('Erro ao reproduzir stream primário. Tentando URL alternativa do Google Drive...');
+    if (videoRef.current && fallbackDriveCdnUrl) {
+      if (videoRef.current.src !== fallbackDriveCdnUrl) {
+        videoRef.current.src = fallbackDriveCdnUrl;
+        videoRef.current.load();
+        videoRef.current.play().catch(() => {});
+        return;
+      }
+    }
+    setStreamError(true);
+    setShowPermissionHelp(true);
+  };
+
+  // Recarregar
   const handleReload = () => {
     setStreamError(false);
     setIframeKey((prev) => prev + 1);
@@ -141,42 +341,60 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  const handleVideoError = () => {
-    console.warn('Erro ao carregar stream direto do vídeo. Alternando para player Google Drive...');
-    setStreamError(true);
-    setPlayerMode('iframe');
-  };
+  // Atalhos de Teclado (Space = Play/Pause, M = Mute, F = Fullscreen, Setas = Seek)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['input', 'textarea', 'select'].includes((e.target as HTMLElement)?.tagName?.toLowerCase())) {
+        return;
+      }
+      if (e.code === 'Space' || e.code === 'KeyK') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        handleToggleMute();
+      } else if (e.code === 'KeyF') {
+        e.preventDefault();
+        handleToggleFullscreen();
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        handleSkip(-5);
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        handleSkip(5);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePlay, handleToggleMute, handleToggleFullscreen]);
 
   return (
     <div className="w-full flex flex-col items-center" id="video-player-section">
-      {/* Se for vídeo vertical 9:16 em telas maiores (Smart TVs, Monitores, Desktops) */}
+      {/* VÍDEO VERTICAL 9:16 (Moldura Ativa para Telas Grandes / Smart TVs e Mobile Full) */}
       {isVertical ? (
         <div
+          ref={containerRef}
           id="video-player-container"
           className="w-full relative rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl border border-teal-500/20 ring-1 ring-white/5 flex items-center justify-center group transition-all duration-300 max-w-sm sm:max-w-md md:max-w-5xl xl:max-w-6xl aspect-[9/16] md:aspect-video md:max-h-[82vh] lg:max-h-[86vh] bg-[#020d17]"
+          onPointerMove={resetAutoHideTimer}
+          onTouchStart={resetAutoHideTimer}
         >
-          {/* Fundo em degradê corporativo oficial inspirado no Grupo Ativa (Preenche os espaços laterais em telas widescreen) */}
+          {/* Fundo em degradê corporativo oficial do Grupo Ativa nas laterais em telas widescreen */}
           <div className="absolute inset-0 bg-gradient-to-r from-[#020d17] via-[#052433] to-[#020d17]" />
-
-          {/* Luz radial ambiente azul-petróleo / ciano / esmeralda do Grupo Ativa */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_50%,rgba(0,168,150,0.22),rgba(5,130,202,0.12),transparent)] pointer-events-none" />
-
-          {/* Halo de luz suave atrás do vídeo vertical (efeito Ambilight corporativo em Smart TVs e telas grandes) */}
           <div className="hidden md:block absolute w-[360px] lg:w-[420px] h-[90%] bg-teal-400/20 blur-3xl rounded-full pointer-events-none z-0" />
 
-          {/* Asa Lateral Esquerda (Exibida em Smart TVs, Desktops e Monitores - Oculta no mobile) */}
+          {/* Asa Lateral Esquerda (Smart TVs e Desktops) */}
           <div className="hidden md:flex flex-1 flex-col items-center justify-between h-full py-8 px-4 lg:px-8 select-none pointer-events-none z-0">
             <div className="flex items-center gap-2 text-[10px] lg:text-xs tracking-[0.25em] uppercase font-semibold text-teal-300/70">
               <span className="w-1.5 h-1.5 rounded-full bg-teal-400/90 shadow-[0_0_8px_rgba(45,212,191,0.8)] animate-pulse" />
               <span>Telepresença</span>
             </div>
-
             <div className="flex flex-col items-center gap-3">
               <div className="w-1.5 h-1.5 rounded-full bg-teal-400/40" />
               <div className="w-px h-28 lg:h-36 bg-gradient-to-b from-transparent via-teal-400/30 to-transparent" />
               <div className="w-1.5 h-1.5 rounded-full bg-teal-400/40" />
             </div>
-
             <div className="flex flex-col items-center gap-1 text-center">
               <span className="text-[10px] lg:text-xs tracking-[0.3em] uppercase font-bold text-teal-200/50">
                 Grupo Ativa
@@ -187,13 +405,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           </div>
 
-          {/* Quadro Central 9:16 (Mantém a proporção estrita original, sem esticar, sem cortes e centralizado) */}
+          {/* Quadro Central 9:16 (Mantém proporção estrita original, sem esticar ou cortar) */}
           <div
+            ref={verticalFrameRef}
             id="vertical-video-frame"
             className="h-full w-auto aspect-[9/16] max-w-full relative flex items-center justify-center rounded-xl md:rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),0_0_30px_rgba(0,168,150,0.25)] ring-1 ring-teal-400/30 border border-teal-500/30 z-10 bg-black shrink-0"
+            onPointerMove={resetAutoHideTimer}
+            onTouchStart={resetAutoHideTimer}
           >
-            {!isPlaying ? (
-              /* Thumbnail / Poster Interativo no formato 9:16 */
+            {!hasStarted ? (
+              /* Capa / Poster Interativo (antes de iniciar o vídeo) */
               <div
                 onClick={handleStartPlay}
                 id="video-poster-overlay"
@@ -204,7 +425,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     : 'linear-gradient(135deg, #020d17 0%, #052433 50%, #020d17 100%)',
                 }}
               >
-                {/* Botão de Play Centralizado com Pulso */}
                 <div className="relative group/btn flex items-center justify-center">
                   <div className="absolute -inset-3 bg-teal-500/30 rounded-full blur-md group-hover/btn:bg-teal-500/50 transition-all duration-300 animate-pulse" />
                   <button
@@ -217,27 +437,65 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </div>
               </div>
             ) : (
-              /* REPRODUTOR ATIVO NO QUADRO 9:16 */
-              <div className="w-full h-full relative bg-black flex items-center justify-center">
-                {activeMode === 'stream' && directStreamUrl ? (
-                  <video
-                    ref={videoRef}
-                    key={`video-stream-${resolvedFileId}-${iframeKey}`}
-                    id="native-html5-player"
-                    src={directStreamUrl}
-                    controls
-                    autoPlay
-                    playsInline
-                    preload="auto"
-                    poster={normalizeImageUrl(coverImage) || undefined}
-                    onLoadedMetadata={handleLoadedMetadata}
-                    onError={handleVideoError}
-                    className="w-full h-full bg-black object-contain"
-                  >
-                    <source src={directStreamUrl} type="video/mp4" />
-                    Seu navegador não suporta reprodução direta de vídeo.
-                  </video>
+              /* REPRODUTOR ATIVO: Vídeo com Controles Estritamente no Rodapé */
+              <div 
+                className="w-full h-full relative bg-black flex items-center justify-center"
+                onClick={handleVideoAreaClick}
+              >
+                {playerMode === 'stream' ? (
+                  <>
+                    <video
+                      ref={videoRef}
+                      key={`video-stream-${resolvedFileId}-${iframeKey}`}
+                      id="native-html5-player"
+                      playsInline
+                      preload="metadata"
+                      poster={normalizeImageUrl(coverImage) || undefined}
+                      onLoadedMetadata={handleLoadedMetadata}
+                      onTimeUpdate={handleTimeUpdate}
+                      onPlay={() => {
+                        setIsVideoPaused(false);
+                        resetAutoHideTimer();
+                      }}
+                      onPause={() => {
+                        setIsVideoPaused(true);
+                        setControlsVisible(true);
+                        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+                      }}
+                      onEnded={() => {
+                        setIsVideoPaused(true);
+                        setControlsVisible(true);
+                      }}
+                      onError={handleVideoError}
+                      className="w-full h-full bg-black object-contain cursor-pointer"
+                    >
+                      {primaryStreamUrl && <source src={primaryStreamUrl} type="video/mp4" />}
+                      {fallbackDriveCdnUrl && <source src={fallbackDriveCdnUrl} type="video/mp4" />}
+                      Seu navegador não suporta reprodução direta de vídeo.
+                    </video>
+
+                    {/* Controles Customizados: Somente na Parte Inferior com Degradê e Ocultação Automática */}
+                    <VideoControls
+                      isPlaying={!isVideoPaused}
+                      onTogglePlay={togglePlay}
+                      visible={controlsVisible}
+                      currentTime={currentTime}
+                      duration={duration}
+                      bufferedEnd={bufferedEnd}
+                      volume={volume}
+                      isMuted={isMuted}
+                      playbackRate={playbackRate}
+                      onSeek={handleSeek}
+                      onVolumeChange={handleVolumeChange}
+                      onToggleMute={handleToggleMute}
+                      onPlaybackRateChange={handlePlaybackRateChange}
+                      isFullscreen={isFullscreen}
+                      onToggleFullscreen={handleToggleFullscreen}
+                      onSkip={handleSkip}
+                    />
+                  </>
                 ) : (
+                  /* Modo Iframe alternativo (se acionado manualmente em testes) */
                   <>
                     <iframe
                       key={`iframe-drive-${iframeKey}`}
@@ -248,7 +506,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       allow="autoplay; fullscreen; encrypted-media"
                       allowFullScreen
                     />
-                    {/* Ocultar e bloquear o botão de pop-out externo [ ↗ ] do Google Drive */}
                     <div
                       id="block-drive-popout"
                       className="absolute top-0 right-0 w-20 h-16 bg-black z-20 pointer-events-auto cursor-default select-none rounded-tr-xl md:rounded-tr-2xl"
@@ -264,19 +521,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             )}
           </div>
 
-          {/* Asa Lateral Direita (Exibida em Smart TVs, Desktops e Monitores - Oculta no mobile) */}
+          {/* Asa Lateral Direita (Smart TVs e Desktops) */}
           <div className="hidden md:flex flex-1 flex-col items-center justify-between h-full py-8 px-4 lg:px-8 select-none pointer-events-none z-0">
             <div className="flex items-center gap-2 text-[10px] lg:text-xs tracking-[0.25em] uppercase font-semibold text-teal-300/70">
               <span>Transmissão HD</span>
               <span className="w-1.5 h-1.5 rounded-full bg-teal-400/90 shadow-[0_0_8px_rgba(45,212,191,0.8)]" />
             </div>
-
             <div className="flex flex-col items-center gap-3">
               <div className="w-1.5 h-1.5 rounded-full bg-teal-400/40" />
               <div className="w-px h-28 lg:h-36 bg-gradient-to-b from-transparent via-teal-400/30 to-transparent" />
               <div className="w-1.5 h-1.5 rounded-full bg-teal-400/40" />
             </div>
-
             <div className="flex flex-col items-center gap-1 text-center">
               <span className="text-[10px] lg:text-xs tracking-[0.3em] uppercase font-bold text-teal-200/50">
                 Atendimento Remoto
@@ -288,20 +543,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
         </div>
       ) : (
-        /* Formatos horizontais tradicionais (16:9 ou 1:1) */
+        /* VÍDEO HORIZONTAL TRADICIONAL (16:9 OU 1:1) */
         <div 
+          ref={containerRef}
           id="video-player-container"
           className={`w-full relative rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10 ring-1 ring-white/5 flex items-center justify-center group transition-all duration-300 ${
             effectiveRatio === '1-1'
               ? 'max-w-2xl aspect-square max-h-[75vh]'
               : 'max-w-5xl aspect-video max-h-[85vh]'
           }`}
+          onPointerMove={resetAutoHideTimer}
+          onTouchStart={resetAutoHideTimer}
         >
-          {/* Glow de fundo sutil */}
           <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/20 via-sky-500/10 to-indigo-500/20 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition duration-1000 -z-10" />
 
-          {!isPlaying ? (
-            /* Thumbnail / Poster Interativo com botão de Play */
+          {!hasStarted ? (
+            /* Poster Interativo com botão de Play */
             <div 
               onClick={handleStartPlay}
               id="video-poster-overlay"
@@ -312,7 +569,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   : 'linear-gradient(135deg, #0f172a 0%, #062534 50%, #090a0f 100%)',
               }}
             >
-              {/* Botão de Play Centralizado com Pulso */}
               <div className="relative group/btn flex items-center justify-center">
                 <div className="absolute -inset-3 bg-teal-500/30 rounded-full blur-md group-hover/btn:bg-teal-500/50 transition-all duration-300 animate-pulse" />
                 <button
@@ -325,31 +581,66 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             </div>
           ) : (
-            /* REPRODUTOR ATIVO */
-            <div className="w-full h-full relative bg-black flex items-center justify-center">
-              {activeMode === 'stream' && directStreamUrl ? (
-                /* Reprodutor Nativo HTML5 (Toca imediatamente, sem tela de download do Drive) */
-                <video
-                  ref={videoRef}
-                  key={`video-stream-${resolvedFileId}-${iframeKey}`}
-                  id="native-html5-player"
-                  src={directStreamUrl}
-                  controls
-                  autoPlay
-                  playsInline
-                  preload="auto"
-                  poster={normalizeImageUrl(coverImage) || undefined}
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onError={handleVideoError}
-                  className={`w-full h-full bg-black ${
-                    videoFit === 'cover' ? 'object-cover' : 'object-contain'
-                  }`}
-                >
-                  <source src={directStreamUrl} type="video/mp4" />
-                  Seu navegador não suporta reprodução direta de vídeo.
-                </video>
+            /* REPRODUTOR ATIVO: Controles Somente no Rodapé */
+            <div 
+              className="w-full h-full relative bg-black flex items-center justify-center"
+              onClick={handleVideoAreaClick}
+            >
+              {playerMode === 'stream' ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    key={`video-stream-${resolvedFileId}-${iframeKey}`}
+                    id="native-html5-player"
+                    playsInline
+                    preload="metadata"
+                    poster={normalizeImageUrl(coverImage) || undefined}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onTimeUpdate={handleTimeUpdate}
+                    onPlay={() => {
+                      setIsVideoPaused(false);
+                      resetAutoHideTimer();
+                    }}
+                    onPause={() => {
+                      setIsVideoPaused(true);
+                      setControlsVisible(true);
+                      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+                    }}
+                    onEnded={() => {
+                      setIsVideoPaused(true);
+                      setControlsVisible(true);
+                    }}
+                    onError={handleVideoError}
+                    className={`w-full h-full bg-black cursor-pointer ${
+                      videoFit === 'cover' ? 'object-cover' : 'object-contain'
+                    }`}
+                  >
+                    {primaryStreamUrl && <source src={primaryStreamUrl} type="video/mp4" />}
+                    {fallbackDriveCdnUrl && <source src={fallbackDriveCdnUrl} type="video/mp4" />}
+                    Seu navegador não suporta reprodução direta de vídeo.
+                  </video>
+
+                  {/* Controles Customizados: Somente na Parte Inferior com Degradê e Ocultação Automática */}
+                  <VideoControls
+                    isPlaying={!isVideoPaused}
+                    onTogglePlay={togglePlay}
+                    visible={controlsVisible}
+                    currentTime={currentTime}
+                    duration={duration}
+                    bufferedEnd={bufferedEnd}
+                    volume={volume}
+                    isMuted={isMuted}
+                    playbackRate={playbackRate}
+                    onSeek={handleSeek}
+                    onVolumeChange={handleVolumeChange}
+                    onToggleMute={handleToggleMute}
+                    onPlaybackRateChange={handlePlaybackRateChange}
+                    isFullscreen={isFullscreen}
+                    onToggleFullscreen={handleToggleFullscreen}
+                    onSkip={handleSkip}
+                  />
+                </>
               ) : (
-                /* Iframe do Google Drive (Modo alternativo) */
                 <>
                   <iframe
                     key={`iframe-drive-${iframeKey}`}
@@ -360,7 +651,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     allow="autoplay; fullscreen; encrypted-media"
                     allowFullScreen
                   />
-                  {/* Ocultar e bloquear o botão de pop-out externo [ ↗ ] do Google Drive */}
                   <div
                     id="block-drive-popout"
                     className="absolute top-0 right-0 w-20 h-16 bg-black z-20 pointer-events-auto cursor-default select-none rounded-tr-xl sm:rounded-tr-2xl"
@@ -377,58 +667,54 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Barra de utilidades / Card com alternador Vídeo Direto e Google Drive (Oculto no link de reprodução público) */}
+      {/* Barra de utilidades / Controles administrativos (apenas quando solicitado) */}
       {showModeControls && (
         <>
           <div className="w-full max-w-5xl mt-2 px-2 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              {/* Card com alternador de Modo de Reprodução */}
-              {canUseStream && (
-                <div className="flex items-center gap-1 bg-slate-900/80 border border-white/10 rounded-md p-0.5 shadow-sm">
-                  <button
-                    type="button"
-                    id="btn-mode-stream"
-                    onClick={() => {
-                      setStreamError(false);
-                      setPlayerMode('stream');
-                      if (!isPlaying) {
-                        handleStartPlay();
-                      }
-                    }}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
-                      activeMode === 'stream'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                    title="Reprodução direta HTML5 nativa"
-                  >
-                    <Film className="w-3.5 h-3.5" />
-                    <span>Vídeo Direto</span>
-                  </button>
-                  <button
-                    type="button"
-                    id="btn-mode-iframe"
-                    onClick={() => {
-                      setPlayerMode('iframe');
-                      if (!isPlaying) {
-                        handleStartPlay();
-                      }
-                    }}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
-                      activeMode === 'iframe'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                    title="Player Padrão do Google Drive"
-                  >
-                    <MonitorPlay className="w-3.5 h-3.5" />
-                    <span>Google Drive</span>
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-1 bg-slate-900/80 border border-white/10 rounded-md p-0.5 shadow-sm">
+                <button
+                  type="button"
+                  id="btn-mode-stream"
+                  onClick={() => {
+                    setStreamError(false);
+                    setPlayerMode('stream');
+                    if (!hasStarted) {
+                      handleStartPlay();
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                    playerMode === 'stream'
+                      ? 'bg-teal-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Player profissional HTML5 com controles inferiores"
+                >
+                  <Film className="w-3.5 h-3.5" />
+                  <span>Player Profissional</span>
+                </button>
+                <button
+                  type="button"
+                  id="btn-mode-iframe"
+                  onClick={() => {
+                    setPlayerMode('iframe');
+                    if (!hasStarted) {
+                      handleStartPlay();
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                    playerMode === 'iframe'
+                      ? 'bg-teal-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Iframe Google Drive"
+                >
+                  <MonitorPlay className="w-3.5 h-3.5" />
+                  <span>Iframe Drive</span>
+                </button>
+              </div>
 
-              {/* Botão de recarregar player */}
-              {isPlaying && (
+              {hasStarted && (
                 <button
                   onClick={handleReload}
                   id="btn-reload-video"
@@ -440,8 +726,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </button>
               )}
 
-              {/* Ajuste de Enquadramento (Ajustar vs Preencher) no modo direto */}
-              {isPlaying && activeMode === 'stream' && (
+              {hasStarted && playerMode === 'stream' && (
                 <div className="flex items-center gap-1 bg-slate-900/80 border border-white/10 rounded-md p-0.5">
                   <button
                     type="button"
@@ -449,7 +734,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     onClick={() => setVideoFit('contain')}
                     className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
                       videoFit === 'contain'
-                        ? 'bg-indigo-600 text-white shadow-sm'
+                        ? 'bg-teal-600 text-white shadow-sm'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                     title="Ajustar vídeo inteiro na tela (sem cortes)"
@@ -462,7 +747,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     onClick={() => setVideoFit('cover')}
                     className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
                       videoFit === 'cover'
-                        ? 'bg-indigo-600 text-white shadow-sm'
+                        ? 'bg-teal-600 text-white shadow-sm'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                     title="Preencher o quadro do reprodutor"
@@ -474,32 +759,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           </div>
 
-          {/* Alerta caso o streaming direto falhe */}
-          {streamError && canUseStream && (
+          {streamError && (
             <div className="w-full max-w-5xl mt-2 p-3 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between">
-              <span>O streaming direto não pôde ser carregado. Exibindo via player do Google Drive.</span>
+              <span>Houve um problema de conexão com a fonte do vídeo.</span>
               <button
                 onClick={() => {
                   setStreamError(false);
                   setPlayerMode('stream');
+                  handleReload();
                 }}
                 className="underline hover:text-white ml-2"
               >
-                Tentar direto novamente
+                Tentar novamente
               </button>
             </div>
           )}
         </>
       )}
 
-      {/* Aviso amigável sobre permissão do Google Drive (Requisito 4) */}
+      {/* Alerta amigável sobre permissão do Google Drive */}
       {showPermissionHelp && (
         <div 
           id="permission-alert-box"
-          className="w-full max-w-5xl mt-3 p-4 rounded-xl bg-slate-900/90 border border-indigo-500/20 text-slate-300 text-xs sm:text-sm backdrop-blur-md shadow-xl transition-all"
+          className="w-full max-w-5xl mt-3 p-4 rounded-xl bg-slate-900/90 border border-teal-500/20 text-slate-300 text-xs sm:text-sm backdrop-blur-md shadow-xl transition-all"
         >
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
             <div className="space-y-2 flex-1">
               <p className="font-semibold text-slate-100">
                 Não foi possível carregar este vídeo. Verifique se o arquivo do Google Drive está configurado como &quot;Qualquer pessoa com o link&quot;.
@@ -526,4 +811,3 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     </div>
   );
 };
-
