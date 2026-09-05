@@ -47,6 +47,38 @@
   </head>
   <body class="bg-[#090a0f] text-slate-100 antialiased min-h-screen">
     <div id="root"></div>
+    <script>
+      (function() {
+        function removeNetlifyBadge() {
+          var selectors = [
+            '#netlify-badge',
+            '[class*="netlify-badge"]',
+            '[id*="netlify-badge"]',
+            '#netlify-drawer-container',
+            '[data-netlify-drawer]',
+            '[data-testid="netlify-badge"]',
+            'iframe[src*="netlify"]'
+          ];
+          selectors.forEach(function(sel) {
+            var elements = document.querySelectorAll(sel);
+            elements.forEach(function(el) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+              el.style.opacity = '0';
+              el.style.pointerEvents = 'none';
+              if (el.parentNode) {
+                try { el.parentNode.removeChild(el); } catch(e) {}
+              }
+            });
+          });
+        }
+        removeNetlifyBadge();
+        if (typeof MutationObserver !== 'undefined') {
+          var obs = new MutationObserver(removeNetlifyBadge);
+          obs.observe(document.documentElement, { childList: true, subtree: true });
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

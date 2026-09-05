@@ -1,1 +1,22 @@
 @import "tailwindcss";
+
+/* Ocultar selos e widgets injetados pelo Netlify */
+#netlify-badge,
+[id*="netlify-badge"],
+[class*="netlify-badge"],
+#netlify-drawer-container,
+[data-netlify-drawer],
+[data-testid="netlify-badge"],
+iframe[src*="netlify"],
+div:has(> a[href*="netlify.com/?utm_campaign=deploys"]),
+a[href*="netlify.com/?utm_campaign=deploys"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  max-height: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  z-index: -9999 !important;
+}
