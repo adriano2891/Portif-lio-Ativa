@@ -13,6 +13,7 @@ interface VideoPlayerProps {
   onPlayRecorded?: () => void;
   autoPlayOnMount?: boolean;
   showModeControls?: boolean;
+  aspectRatioProp?: 'auto' | '9:16' | '16:9' | '1:1';
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -24,6 +25,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onPlayRecorded,
   autoPlayOnMount = false,
   showModeControls = false,
+  aspectRatioProp = 'auto',
 }) => {
   const isStaticOrNetlify = typeof window !== 'undefined' && (
     window.location.hostname.includes('netlify.app') ||
@@ -38,9 +40,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return isStaticOrNetlify ? 'iframe' : 'stream';
   });
   const [iframeKey, setIframeKey] = useState(0);
-  const [aspectRatio, setAspectRatio] = useState<'16-9' | '9-16' | '1-1' | 'auto'>('auto');
+  const [detectedRatio, setDetectedRatio] = useState<'9-16' | '16-9' | '1-1'>('9-16');
   const [videoFit, setVideoFit] = useState<'contain' | 'cover'>('contain');
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Detectar resolução da imagem de capa para identificar vídeo 9:16 antecipadamente
+  useEffect(() => {
+    if (coverImage) {
+      const normalized = normalizeImageUrl(coverImage);
+      if (normalized) {
+        const img = new Image();
+        img.src = normalized;
+        img.onload = () => {
+          if (img.naturalWidth && img.naturalHeight) {
+            const ratio = img.naturalWidth / img.naturalHeight;
+            if (ratio < 0.75) {
+              setDetectedRatio('9-16');
+            } else if (ratio >= 0.75 && ratio <= 1.2) {
+              setDetectedRatio('1-1');
+            } else {
+              setDetectedRatio('16-9');
+            }
+          }
+        };
+      }
+    }
+  }, [coverImage]);
 
   // Detectar a resolução intrínseca do vídeo quando o arquivo carregar metadados
   const handleLoadedMetadata = () => {
@@ -49,18 +74,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (videoWidth && videoHeight) {
         const ratio = videoWidth / videoHeight;
         if (ratio < 0.75) {
-          // Formato vertical (ex.: 9:16 ou gravação de celular / stories / reels / whatsapp)
-          setAspectRatio('9-16');
+          setDetectedRatio('9-16');
         } else if (ratio >= 0.75 && ratio <= 1.2) {
-          // Formato quadrado
-          setAspectRatio('1-1');
+          setDetectedRatio('1-1');
         } else {
-          // Formato paisagem / widescreen
-          setAspectRatio('16-9');
+          setDetectedRatio('16-9');
         }
       }
     }
   };
+
+  const effectiveRatio = React.useMemo(() => {
+    if (aspectRatioProp === '9:16') return '9-16';
+    if (aspectRatioProp === '16:9') return '16-9';
+    if (aspectRatioProp === '1:1') return '1-1';
+    return detectedRatio;
+  }, [aspectRatioProp, detectedRatio]);
+
+  const isVertical = effectiveRatio === '9-16';
 
   // Extrair ID do arquivo se não tiver sido passado explicitamente
   const resolvedFileId = React.useMemo(() => {
@@ -118,95 +149,233 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   return (
     <div className="w-full flex flex-col items-center" id="video-player-section">
-      {/* Player Container responsivo para todos os dispositivos (Mobile, Tablet, Desktop, Widescreen) */}
-      <div 
-        id="video-player-container"
-        className={`w-full relative rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10 ring-1 ring-white/5 flex items-center justify-center group transition-all duration-300 ${
-          aspectRatio === '9-16'
-            ? 'max-w-md aspect-[9/16] max-h-[82vh]'
-            : aspectRatio === '1-1'
-            ? 'max-w-2xl aspect-square max-h-[75vh]'
-            : 'max-w-5xl aspect-video max-h-[85vh]'
-        }`}
-      >
-        {/* Glow de fundo sutil */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 via-sky-500/10 to-purple-500/20 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition duration-1000 -z-10" />
+      {/* Se for vídeo vertical 9:16 em telas maiores (Smart TVs, Monitores, Desktops) */}
+      {isVertical ? (
+        <div
+          id="video-player-container"
+          className="w-full relative rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl border border-teal-500/20 ring-1 ring-white/5 flex items-center justify-center group transition-all duration-300 max-w-sm sm:max-w-md md:max-w-5xl xl:max-w-6xl aspect-[9/16] md:aspect-video md:max-h-[82vh] lg:max-h-[86vh] bg-[#020d17]"
+        >
+          {/* Fundo em degradê corporativo oficial inspirado no Grupo Ativa (Preenche os espaços laterais em telas widescreen) */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#020d17] via-[#052433] to-[#020d17]" />
 
-        {!isPlaying ? (
-          /* Thumbnail / Poster Interativo com botão de Play */
-          <div 
-            onClick={handleStartPlay}
-            id="video-poster-overlay"
-            className="absolute inset-0 w-full h-full cursor-pointer flex flex-col items-center justify-center select-none bg-cover bg-center transition-transform duration-500"
-            style={{
-              backgroundImage: normalizeImageUrl(coverImage)
-                ? `linear-gradient(to top, rgba(9,10,15,0.85) 0%, rgba(9,10,15,0.4) 50%, rgba(9,10,15,0.85) 100%), url("${normalizeImageUrl(coverImage)}")`
-                : 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #090a0f 100%)',
-            }}
-          >
-            {/* Botão de Play Centralizado com Pulso */}
-            <div className="relative group/btn flex items-center justify-center">
-              <div className="absolute -inset-3 bg-indigo-500/30 rounded-full blur-md group-hover/btn:bg-indigo-500/50 transition-all duration-300 animate-pulse" />
-              <button
-                id="btn-play-hero"
-                aria-label="Iniciar reprodução do vídeo"
-                className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-indigo-600/90 text-white flex items-center justify-center pl-1 shadow-2xl border border-indigo-400/40 transform transition-transform duration-300 group-hover/btn:scale-110 active:scale-95 hover:bg-indigo-500"
-              >
-                <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-white" />
-              </button>
+          {/* Luz radial ambiente azul-petróleo / ciano / esmeralda do Grupo Ativa */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_50%,rgba(0,168,150,0.22),rgba(5,130,202,0.12),transparent)] pointer-events-none" />
+
+          {/* Halo de luz suave atrás do vídeo vertical (efeito Ambilight corporativo em Smart TVs e telas grandes) */}
+          <div className="hidden md:block absolute w-[360px] lg:w-[420px] h-[90%] bg-teal-400/20 blur-3xl rounded-full pointer-events-none z-0" />
+
+          {/* Asa Lateral Esquerda (Exibida em Smart TVs, Desktops e Monitores - Oculta no mobile) */}
+          <div className="hidden md:flex flex-1 flex-col items-center justify-between h-full py-8 px-4 lg:px-8 select-none pointer-events-none z-0">
+            <div className="flex items-center gap-2 text-[10px] lg:text-xs tracking-[0.25em] uppercase font-semibold text-teal-300/70">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400/90 shadow-[0_0_8px_rgba(45,212,191,0.8)] animate-pulse" />
+              <span>Telepresença</span>
+            </div>
+
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-400/40" />
+              <div className="w-px h-28 lg:h-36 bg-gradient-to-b from-transparent via-teal-400/30 to-transparent" />
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-400/40" />
+            </div>
+
+            <div className="flex flex-col items-center gap-1 text-center">
+              <span className="text-[10px] lg:text-xs tracking-[0.3em] uppercase font-bold text-teal-200/50">
+                Grupo Ativa
+              </span>
+              <span className="text-[9px] tracking-[0.15em] text-teal-400/40 font-medium">
+                Tecnologia & Segurança
+              </span>
             </div>
           </div>
-        ) : (
-          /* REPRODUTOR ATIVO */
-          <div className="w-full h-full relative bg-black flex items-center justify-center">
-            {activeMode === 'stream' && directStreamUrl ? (
-              /* Reprodutor Nativo HTML5 (Toca imediatamente, sem tela de download do Drive) */
-              <video
-                ref={videoRef}
-                key={`video-stream-${resolvedFileId}-${iframeKey}`}
-                id="native-html5-player"
-                src={directStreamUrl}
-                controls
-                autoPlay
-                playsInline
-                preload="auto"
-                poster={normalizeImageUrl(coverImage) || undefined}
-                onLoadedMetadata={handleLoadedMetadata}
-                onError={handleVideoError}
-                className={`w-full h-full bg-black ${
-                  videoFit === 'cover' ? 'object-cover' : 'object-contain'
-                }`}
+
+          {/* Quadro Central 9:16 (Mantém a proporção estrita original, sem esticar, sem cortes e centralizado) */}
+          <div
+            id="vertical-video-frame"
+            className="h-full w-auto aspect-[9/16] max-w-full relative flex items-center justify-center rounded-xl md:rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),0_0_30px_rgba(0,168,150,0.25)] ring-1 ring-teal-400/30 border border-teal-500/30 z-10 bg-black shrink-0"
+          >
+            {!isPlaying ? (
+              /* Thumbnail / Poster Interativo no formato 9:16 */
+              <div
+                onClick={handleStartPlay}
+                id="video-poster-overlay"
+                className="absolute inset-0 w-full h-full cursor-pointer flex flex-col items-center justify-center select-none bg-cover bg-center transition-transform duration-500"
+                style={{
+                  backgroundImage: normalizeImageUrl(coverImage)
+                    ? `linear-gradient(to top, rgba(2,13,23,0.75) 0%, rgba(2,13,23,0.25) 50%, rgba(2,13,23,0.75) 100%), url("${normalizeImageUrl(coverImage)}")`
+                    : 'linear-gradient(135deg, #020d17 0%, #052433 50%, #020d17 100%)',
+                }}
               >
-                <source src={directStreamUrl} type="video/mp4" />
-                Seu navegador não suporta reprodução direta de vídeo.
-              </video>
+                {/* Botão de Play Centralizado com Pulso */}
+                <div className="relative group/btn flex items-center justify-center">
+                  <div className="absolute -inset-3 bg-teal-500/30 rounded-full blur-md group-hover/btn:bg-teal-500/50 transition-all duration-300 animate-pulse" />
+                  <button
+                    id="btn-play-hero"
+                    aria-label="Iniciar reprodução do vídeo"
+                    className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-teal-600/95 text-white flex items-center justify-center pl-1 shadow-2xl border border-teal-300/40 transform transition-transform duration-300 group-hover/btn:scale-110 active:scale-95 hover:bg-teal-500"
+                  >
+                    <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-white" />
+                  </button>
+                </div>
+              </div>
             ) : (
-              /* Iframe do Google Drive (Modo alternativo) */
-              <>
-                <iframe
-                  key={`iframe-drive-${iframeKey}`}
-                  id="google-drive-iframe"
-                  src={previewUrl}
-                  title={title || 'Vídeo do Google Drive'}
-                  className="w-full h-full border-0 absolute inset-0"
-                  allow="autoplay; fullscreen; encrypted-media"
-                  allowFullScreen
-                />
-                {/* Ocultar e bloquear o botão de pop-out externo [ ↗ ] do Google Drive */}
-                <div
-                  id="block-drive-popout"
-                  className="absolute top-0 right-0 w-20 h-16 bg-black z-20 pointer-events-auto cursor-default select-none rounded-tr-xl sm:rounded-tr-2xl"
-                  aria-hidden="true"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                  }}
-                />
-              </>
+              /* REPRODUTOR ATIVO NO QUADRO 9:16 */
+              <div className="w-full h-full relative bg-black flex items-center justify-center">
+                {activeMode === 'stream' && directStreamUrl ? (
+                  <video
+                    ref={videoRef}
+                    key={`video-stream-${resolvedFileId}-${iframeKey}`}
+                    id="native-html5-player"
+                    src={directStreamUrl}
+                    controls
+                    autoPlay
+                    playsInline
+                    preload="auto"
+                    poster={normalizeImageUrl(coverImage) || undefined}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onError={handleVideoError}
+                    className="w-full h-full bg-black object-contain"
+                  >
+                    <source src={directStreamUrl} type="video/mp4" />
+                    Seu navegador não suporta reprodução direta de vídeo.
+                  </video>
+                ) : (
+                  <>
+                    <iframe
+                      key={`iframe-drive-${iframeKey}`}
+                      id="google-drive-iframe"
+                      src={previewUrl}
+                      title={title || 'Vídeo do Google Drive'}
+                      className="w-full h-full border-0 absolute inset-0"
+                      allow="autoplay; fullscreen; encrypted-media"
+                      allowFullScreen
+                    />
+                    {/* Ocultar e bloquear o botão de pop-out externo [ ↗ ] do Google Drive */}
+                    <div
+                      id="block-drive-popout"
+                      className="absolute top-0 right-0 w-20 h-16 bg-black z-20 pointer-events-auto cursor-default select-none rounded-tr-xl md:rounded-tr-2xl"
+                      aria-hidden="true"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
+                    />
+                  </>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
+
+          {/* Asa Lateral Direita (Exibida em Smart TVs, Desktops e Monitores - Oculta no mobile) */}
+          <div className="hidden md:flex flex-1 flex-col items-center justify-between h-full py-8 px-4 lg:px-8 select-none pointer-events-none z-0">
+            <div className="flex items-center gap-2 text-[10px] lg:text-xs tracking-[0.25em] uppercase font-semibold text-teal-300/70">
+              <span>Transmissão HD</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400/90 shadow-[0_0_8px_rgba(45,212,191,0.8)]" />
+            </div>
+
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-400/40" />
+              <div className="w-px h-28 lg:h-36 bg-gradient-to-b from-transparent via-teal-400/30 to-transparent" />
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-400/40" />
+            </div>
+
+            <div className="flex flex-col items-center gap-1 text-center">
+              <span className="text-[10px] lg:text-xs tracking-[0.3em] uppercase font-bold text-teal-200/50">
+                Atendimento Remoto
+              </span>
+              <span className="text-[9px] tracking-[0.15em] text-teal-400/40 font-medium">
+                Conexão ao Vivo
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Formatos horizontais tradicionais (16:9 ou 1:1) */
+        <div 
+          id="video-player-container"
+          className={`w-full relative rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10 ring-1 ring-white/5 flex items-center justify-center group transition-all duration-300 ${
+            effectiveRatio === '1-1'
+              ? 'max-w-2xl aspect-square max-h-[75vh]'
+              : 'max-w-5xl aspect-video max-h-[85vh]'
+          }`}
+        >
+          {/* Glow de fundo sutil */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/20 via-sky-500/10 to-indigo-500/20 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition duration-1000 -z-10" />
+
+          {!isPlaying ? (
+            /* Thumbnail / Poster Interativo com botão de Play */
+            <div 
+              onClick={handleStartPlay}
+              id="video-poster-overlay"
+              className="absolute inset-0 w-full h-full cursor-pointer flex flex-col items-center justify-center select-none bg-cover bg-center transition-transform duration-500"
+              style={{
+                backgroundImage: normalizeImageUrl(coverImage)
+                  ? `linear-gradient(to top, rgba(9,10,15,0.85) 0%, rgba(9,10,15,0.4) 50%, rgba(9,10,15,0.85) 100%), url("${normalizeImageUrl(coverImage)}")`
+                  : 'linear-gradient(135deg, #0f172a 0%, #062534 50%, #090a0f 100%)',
+              }}
+            >
+              {/* Botão de Play Centralizado com Pulso */}
+              <div className="relative group/btn flex items-center justify-center">
+                <div className="absolute -inset-3 bg-teal-500/30 rounded-full blur-md group-hover/btn:bg-teal-500/50 transition-all duration-300 animate-pulse" />
+                <button
+                  id="btn-play-hero"
+                  aria-label="Iniciar reprodução do vídeo"
+                  className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-teal-600/90 text-white flex items-center justify-center pl-1 shadow-2xl border border-teal-400/40 transform transition-transform duration-300 group-hover/btn:scale-110 active:scale-95 hover:bg-teal-500"
+                >
+                  <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-white" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* REPRODUTOR ATIVO */
+            <div className="w-full h-full relative bg-black flex items-center justify-center">
+              {activeMode === 'stream' && directStreamUrl ? (
+                /* Reprodutor Nativo HTML5 (Toca imediatamente, sem tela de download do Drive) */
+                <video
+                  ref={videoRef}
+                  key={`video-stream-${resolvedFileId}-${iframeKey}`}
+                  id="native-html5-player"
+                  src={directStreamUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  preload="auto"
+                  poster={normalizeImageUrl(coverImage) || undefined}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onError={handleVideoError}
+                  className={`w-full h-full bg-black ${
+                    videoFit === 'cover' ? 'object-cover' : 'object-contain'
+                  }`}
+                >
+                  <source src={directStreamUrl} type="video/mp4" />
+                  Seu navegador não suporta reprodução direta de vídeo.
+                </video>
+              ) : (
+                /* Iframe do Google Drive (Modo alternativo) */
+                <>
+                  <iframe
+                    key={`iframe-drive-${iframeKey}`}
+                    id="google-drive-iframe"
+                    src={previewUrl}
+                    title={title || 'Vídeo do Google Drive'}
+                    className="w-full h-full border-0 absolute inset-0"
+                    allow="autoplay; fullscreen; encrypted-media"
+                    allowFullScreen
+                  />
+                  {/* Ocultar e bloquear o botão de pop-out externo [ ↗ ] do Google Drive */}
+                  <div
+                    id="block-drive-popout"
+                    className="absolute top-0 right-0 w-20 h-16 bg-black z-20 pointer-events-auto cursor-default select-none rounded-tr-xl sm:rounded-tr-2xl"
+                    aria-hidden="true"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Barra de utilidades / Card com alternador Vídeo Direto e Google Drive (Oculto no link de reprodução público) */}
       {showModeControls && (

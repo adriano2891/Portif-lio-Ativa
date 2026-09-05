@@ -64,6 +64,7 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({ onNavigateAdmin })
                 fileId={videoData.video_file_id}
                 coverImage={videoData.cover_image}
                 title={videoData.title}
+                aspectRatioProp={videoData.aspect_ratio}
               />
             </div>
           </div>

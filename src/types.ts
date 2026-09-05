@@ -15,6 +15,7 @@ export interface VideoSettings {
   og_title: string;
   og_description: string;
   og_image: string;
+  aspect_ratio?: 'auto' | '9:16' | '16:9' | '1:1';
   created_at: string;
   updated_at: string;
 }

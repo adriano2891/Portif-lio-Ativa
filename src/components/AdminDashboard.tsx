@@ -50,6 +50,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
 
   // Dados do formulário de vídeo
   const [videoUrlInput, setVideoUrlInput] = useState('');
+  const [aspectRatioInput, setAspectRatioInput] = useState<'auto' | '9:16' | '16:9' | '1:1'>('auto');
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewEmbedUrl, setPreviewEmbedUrl] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -87,6 +88,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
     if (fetchedSettings) {
       setSettings(fetchedSettings);
       setVideoUrlInput(fetchedSettings.video_original_url || '');
+      if (fetchedSettings.aspect_ratio) {
+        setAspectRatioInput(fetchedSettings.aspect_ratio);
+      }
       if (fetchedSettings.video_preview_url) {
         setPreviewEmbedUrl(fetchedSettings.video_preview_url);
         setPreviewId(fetchedSettings.video_file_id);
@@ -151,6 +155,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
       video_original_url: videoUrlInput.trim(),
       video_file_id: result.fileId,
       video_preview_url: result.previewUrl,
+      aspect_ratio: aspectRatioInput,
       is_active: true,
     });
     setSaving(false);
@@ -213,6 +218,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
       og_title: settings.og_title,
       og_description: settings.og_description,
       og_image: settings.og_image,
+      aspect_ratio: aspectRatioInput,
     });
     setSaving(false);
 
@@ -518,6 +524,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
                       )}
                     </div>
 
+                    {/* Proporção e Enquadramento do Vídeo (9:16 com Degradê Grupo Ativa) */}
+                    <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                      <label
+                        className="block text-xs font-semibold text-slate-300"
+                        htmlFor="video-aspect-ratio-select"
+                      >
+                        Proporção do Vídeo & Moldura para Telas Grandes (Smart TVs / Desktop)
+                      </label>
+                      <select
+                        id="video-aspect-ratio-select"
+                        value={aspectRatioInput}
+                        onChange={(e) => setAspectRatioInput(e.target.value as any)}
+                        className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                      >
+                        <option value="9:16">Vertical 9:16 (Celular / Reels / Stories com Moldura Degradê Grupo Ativa nas laterais em Smart TVs)</option>
+                        <option value="auto">Automático (Detectar proporção pela imagem de capa ou metadados)</option>
+                        <option value="16:9">Horizontal 16:9 (Padrão Widescreen / TV)</option>
+                        <option value="1:1">Quadrado 1:1</option>
+                      </select>
+                      <p className="text-[11px] text-teal-400/80">
+                        {aspectRatioInput === '9:16' || aspectRatioInput === 'auto'
+                          ? '✨ Vídeos no formato vertical 9:16 mantêm a proporção original centralizada, sem cortes ou distorções, com as áreas laterais preenchidas pelo degradê corporativo oficial do Grupo Ativa em Smart TVs, monitores e desktops.'
+                          : 'Vídeo configurado para formato horizontal tradicional (16:9).'}
+                      </p>
+                    </div>
+
                     {/* Botões de Ação (Requisito 5) */}
                     <div className="pt-2 flex flex-wrap items-center gap-3">
                       <button
@@ -579,8 +611,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
                       </div>
 
                       {previewEmbedUrl && (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-medium">
-                          16:9 Pronto
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/30 font-medium flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                          {aspectRatioInput === '9:16'
+                            ? '9:16 Moldura Grupo Ativa'
+                            : aspectRatioInput === '1:1'
+                            ? '1:1 Quadrado'
+                            : aspectRatioInput === '16:9'
+                            ? '16:9 Widescreen'
+                            : 'Auto-detectado'}
                         </span>
                       )}
                     </div>
@@ -595,6 +634,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
                             coverImage={settings?.cover_image}
                             title={settings?.title || 'Pré-visualização do Vídeo'}
                             showModeControls={true}
+                            aspectRatioProp={aspectRatioInput}
                           />
                         </div>
 

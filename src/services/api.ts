@@ -25,6 +25,7 @@ export const DEFAULT_VIDEO_SETTINGS: VideoSettings = {
   og_title: 'Vídeo Oficial em Destaque',
   og_description: 'Assista agora mesmo à apresentação completa na Landing Page.',
   og_image: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=1200&auto=format&fit=crop&q=80',
+  aspect_ratio: '9:16',
   created_at: '2026-09-03T22:39:30.903Z',
   updated_at: '2026-09-04T08:21:34.423Z',
 };
