@@ -8,6 +8,7 @@ import {
   adminLogout,
   changeAdminPassword,
   resolveImageUrlApi,
+  isLocalSession,
 } from '../services/api';
 import { VideoPlayer } from './VideoPlayer';
 import { parseGoogleDriveVideoUrl } from '../utils/googleDrive';
@@ -291,10 +292,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigatePublic
               <span className="font-semibold text-white text-sm tracking-tight block">
                 Painel Administrativo
               </span>
-              <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Banco de dados conectado
-              </span>
+              {isLocalSession() ? (
+                <span className="text-[11px] text-amber-400 font-medium flex items-center gap-1" title="Rodando em modo estático/local (Netlify). Alterações salvas localmente.">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Modo Local (Netlify)
+                </span>
+              ) : (
+                <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Banco de dados conectado
+                </span>
+              )}
             </div>
           </div>
 

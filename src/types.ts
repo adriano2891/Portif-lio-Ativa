@@ -47,4 +47,6 @@ export interface ApiResponse<T = any> {
   data?: T;
   message?: string;
   error?: string;
+  token?: string;
+  username?: string;
 }

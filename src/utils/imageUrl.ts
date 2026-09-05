@@ -1,3 +1,5 @@
+const API_BASE = ((import.meta as any).env?.VITE_API_URL || '').replace(/\/$/, '');
+
 /**
  * Utilitário para normalizar URLs de imagem (ImgBB, Google Drive, etc.)
  * para que possam ser carregadas diretamente como src em <img> ou background-image em CSS.
@@ -15,7 +17,7 @@ export function normalizeImageUrl(url: string | null | undefined): string {
   // Página de visualização do ImgBB (ex: https://ibb.co/0pY01RJb)
   // Redireciona através do proxy do servidor que extrai a URL direta da imagem
   if (/^https?:\/\/ibb\.co\/[a-zA-Z0-9_-]+/i.test(trimmed)) {
-    return `/api/public/image-proxy?url=${encodeURIComponent(trimmed)}`;
+    return `${API_BASE}/api/public/image-proxy?url=${encodeURIComponent(trimmed)}`;
   }
 
   // Google Drive URLs como imagem: https://drive.google.com/file/d/{id}/view -> https://lh3.googleusercontent.com/d/{id}

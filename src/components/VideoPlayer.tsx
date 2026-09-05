@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, AlertCircle, RefreshCw, Film, MonitorPlay, Maximize, Smartphone, Tv } from 'lucide-react';
-import { trackEvent } from '../services/api';
+import { trackEvent, API_BASE } from '../services/api';
 import { parseGoogleDriveVideoUrl } from '../utils/googleDrive';
 import { normalizeImageUrl } from '../utils/imageUrl';
 
@@ -69,7 +69,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Se não houver resolvedFileId, recai para o iframe
   const canUseStream = Boolean(resolvedFileId);
   const activeMode = canUseStream && !streamError ? playerMode : 'iframe';
-  const directStreamUrl = resolvedFileId ? `/api/public/video-stream/${resolvedFileId}` : '';
+  const directStreamUrl = resolvedFileId ? `${API_BASE}/api/public/video-stream/${resolvedFileId}` : '';
 
   const handleStartPlay = () => {
     setIsPlaying(true);
