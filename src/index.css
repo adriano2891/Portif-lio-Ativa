@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+/* Ocultar qualquer botão nativo de Transmitir / Cast / TV / Remote Playback sobre o vídeo */
+video::-internal-media-controls-cast-button,
+video::-webkit-media-controls-cast-button,
+video::-webkit-media-controls-remote-playback-button,
+video::-internal-media-controls-overlay-cast-button,
+video::-webkit-media-controls-overlay-cast-button,
+*::-internal-media-controls-cast-button,
+*::-webkit-media-controls-cast-button,
+*::-webkit-media-controls-overlay-cast-button,
+google-cast-launcher,
+button[is="google-cast-button"],
+.cast-button,
+[data-cast-button] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: absolute !important;
+  z-index: -10 !important;
+}
+
 /* Ocultar selos e widgets injetados pelo Netlify */
 #netlify-badge,
 [id*="netlify-badge"],

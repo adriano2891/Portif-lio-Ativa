@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Play, AlertCircle, RefreshCw, Film, MonitorPlay } from 'lucide-react';
+import { Play, RefreshCw, Film, ExternalLink } from 'lucide-react';
 import { trackEvent, API_BASE } from '../services/api';
 import { parseGoogleDriveVideoUrl } from '../utils/googleDrive';
 import { normalizeImageUrl } from '../utils/imageUrl';
@@ -37,7 +37,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Estado de início da reprodução
   const [hasStarted, setHasStarted] = useState(autoPlayOnMount);
   const [isVideoPaused, setIsVideoPaused] = useState(true);
-  const [showPermissionHelp, setShowPermissionHelp] = useState(false);
   const [streamError, setStreamError] = useState(false);
   const [playerMode, setPlayerMode] = useState<'stream' | 'iframe'>('stream');
   const [iframeKey, setIframeKey] = useState(0);
@@ -155,6 +154,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       }
     };
   }, []);
+
+  // Desativar qualquer recurso de Cast / Transmissão remota / TV inteligente no vídeo
+  useEffect(() => {
+    if (videoRef.current) {
+      try {
+        videoRef.current.disableRemotePlayback = true;
+        (videoRef.current as any).disablePictureInPicture = true;
+        videoRef.current.setAttribute('disableRemotePlayback', '');
+        videoRef.current.setAttribute('controlsList', 'nodownload nofullscreen noremoteplayback');
+        videoRef.current.setAttribute('x-webkit-wirelessbrowsing', 'false');
+        videoRef.current.setAttribute('x-webkit-airplay', 'deny');
+      } catch (e) {}
+    }
+  }, [hasStarted, playerMode]);
 
   // Iniciar Reprodução (Chamada síncrona dentro do gesto do usuário)
   const handleStartPlay = (e?: React.MouseEvent) => {
@@ -454,6 +467,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     src={activeVideoSrc}
                     playsInline
                     preload="auto"
+                    disableRemotePlayback
+                    disablePictureInPicture
+                    controlsList="nodownload nofullscreen noremoteplayback"
                     poster={normalizeImageUrl(coverImage) || undefined}
                     onLoadedMetadata={handleLoadedMetadata}
                     onTimeUpdate={handleTimeUpdate}
@@ -599,6 +615,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     src={activeVideoSrc}
                     playsInline
                     preload="auto"
+                    disableRemotePlayback
+                    disablePictureInPicture
+                    controlsList="nodownload nofullscreen noremoteplayback"
                     poster={normalizeImageUrl(coverImage) || undefined}
                     onLoadedMetadata={handleLoadedMetadata}
                     onTimeUpdate={handleTimeUpdate}
@@ -738,7 +757,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   }`}
                   title="Iframe Google Drive"
                 >
-                  <MonitorPlay className="w-3.5 h-3.5" />
+                  <ExternalLink className="w-3.5 h-3.5" />
                   <span>Iframe Drive</span>
                 </button>
               </div>
@@ -804,38 +823,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           )}
         </>
-      )}
-
-      {/* Alerta amigável sobre permissão do Google Drive */}
-      {showPermissionHelp && (
-        <div 
-          id="permission-alert-box"
-          className="w-full max-w-5xl mt-3 p-4 rounded-xl bg-slate-900/90 border border-teal-500/20 text-slate-300 text-xs sm:text-sm backdrop-blur-md shadow-xl transition-all"
-        >
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
-            <div className="space-y-2 flex-1">
-              <p className="font-semibold text-slate-100">
-                Não foi possível carregar este vídeo. Verifique se o arquivo do Google Drive está configurado como &quot;Qualquer pessoa com o link&quot;.
-              </p>
-              <p className="text-slate-400 leading-relaxed">
-                Para que vídeos do Google Drive possam ser reproduzidos publicamente na página:
-              </p>
-              <ol className="list-decimal list-inside space-y-1 text-slate-300 pl-1">
-                <li>Abra o arquivo no seu <strong>Google Drive</strong>.</li>
-                <li>Clique no botão <strong>Compartilhar</strong> no canto superior direito.</li>
-                <li>Em <em>Acesso geral</em>, altere de <em>&quot;Restrito&quot;</em> para <strong>&quot;Qualquer pessoa com o link&quot;</strong>.</li>
-                <li>Clique em <strong>Concluído</strong> e recarregue a página.</li>
-              </ol>
-            </div>
-            <button
-              onClick={() => setShowPermissionHelp(false)}
-              className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded bg-slate-800"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );
