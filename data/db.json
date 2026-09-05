@@ -1,0 +1,231 @@
+{
+  "video_settings": {
+    "id": "primary",
+    "video_original_url": "https://drive.google.com/file/d/1imCug0lfQ1_R-VbGCLXMspYUzVH-5PuF/view?usp=sharing",
+    "video_file_id": "1imCug0lfQ1_R-VbGCLXMspYUzVH-5PuF",
+    "video_preview_url": "https://drive.google.com/file/d/1imCug0lfQ1_R-VbGCLXMspYUzVH-5PuF/preview",
+    "title": "Demonstração Oficial 2026",
+    "subtitle": "",
+    "description": "Vídeo configurado pelo administrador para a landing page.",
+    "cover_image": "https://i.ibb.co/ZRcQvpTD/Whats-App-Video-2026-08-31-at-17-03-53-1-00-00-01.png",
+    "is_active": true,
+    "page_name": "Apresentação Oficial",
+    "logo_url": "",
+    "text_above": "Toque para iniciar a reprodução em tela cheia com áudio e controles.",
+    "text_below": "Para dúvidas, esclarecimentos ou atendimento prioritário, fale conosco.",
+    "og_title": "Vídeo Oficial em Destaque",
+    "og_description": "Assista agora mesmo à apresentação completa na Landing Page.",
+    "og_image": "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=1200&auto=format&fit=crop&q=80",
+    "created_at": "2026-09-03T22:39:30.903Z",
+    "updated_at": "2026-09-04T08:21:34.423Z"
+  },
+  "video_analytics": [
+    {
+      "id": "75fee7ae-b0e3-471f-9c8e-b00812248072",
+      "event_type": "page_view",
+      "session_id": "sess_0x6mi9uby_1788513180445",
+      "created_at": "2026-09-04T09:13:00.513Z"
+    },
+    {
+      "id": "d5ba6856-4d81-46a5-95a1-ae2c1085d1d1",
+      "event_type": "page_view",
+      "session_id": "sess_s7wayifkx_1788509988829",
+      "created_at": "2026-09-04T08:19:49.856Z"
+    },
+    {
+      "id": "a53cca11-5efd-4c2f-aebe-bf8b55a285e5",
+      "event_type": "page_view",
+      "session_id": "sess_8es4s4rz3_1788509938015",
+      "created_at": "2026-09-04T08:18:59.044Z"
+    },
+    {
+      "id": "41f7864d-31b4-4407-9c94-b630062976a3",
+      "event_type": "video_play",
+      "session_id": "sess_7vyrk28ta_1788509907047",
+      "created_at": "2026-09-04T08:18:31.573Z"
+    },
+    {
+      "id": "c9f84085-c442-47bb-adaf-295c706a635e",
+      "event_type": "page_view",
+      "session_id": "sess_7vyrk28ta_1788509907047",
+      "created_at": "2026-09-04T08:18:28.070Z"
+    },
+    {
+      "id": "e1a27e08-e4d5-4b7e-b053-b859e4f1b1a9",
+      "event_type": "video_play",
+      "session_id": "sess_yavevsa9d_1788509873996",
+      "created_at": "2026-09-04T08:18:00.134Z"
+    },
+    {
+      "id": "75603710-e665-48ad-bbd5-731641bec910",
+      "event_type": "page_view",
+      "session_id": "sess_yavevsa9d_1788509873996",
+      "created_at": "2026-09-04T08:17:55.041Z"
+    },
+    {
+      "id": "9a324a31-4bbc-4ad7-8db3-e0c6bbfd7790",
+      "event_type": "page_view",
+      "session_id": "sess_hwx3puxy0_1788476031257",
+      "created_at": "2026-09-04T00:15:53.272Z"
+    },
+    {
+      "id": "6de88e04-263f-4773-9327-e7f8d394ac78",
+      "event_type": "page_view",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-04T00:15:46.838Z"
+    },
+    {
+      "id": "216969f2-cc4f-4be1-bb0f-13aca6d8d64b",
+      "event_type": "page_view",
+      "session_id": "sess_hwx3puxy0_1788476031257",
+      "created_at": "2026-09-04T00:14:06.125Z"
+    },
+    {
+      "id": "95810007-262e-46f0-bb87-ba151da8fe06",
+      "event_type": "page_view",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-04T00:13:58.116Z"
+    },
+    {
+      "id": "abcac08c-a7f9-4967-837a-1fbc40f3770c",
+      "event_type": "page_view",
+      "session_id": "sess_hwx3puxy0_1788476031257",
+      "created_at": "2026-09-04T00:11:45.954Z"
+    },
+    {
+      "id": "d3e901c0-f298-49e5-aae6-f7185037df5e",
+      "event_type": "page_view",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-04T00:11:40.097Z"
+    },
+    {
+      "id": "c25acd3a-4ebd-4f6f-a6ae-1d4458b7f5a4",
+      "event_type": "page_view",
+      "session_id": "sess_hwx3puxy0_1788476031257",
+      "created_at": "2026-09-04T00:09:40.699Z"
+    },
+    {
+      "id": "ac2c8761-2b92-4e07-a2ec-b5d4c7788514",
+      "event_type": "page_view",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-04T00:09:29.649Z"
+    },
+    {
+      "id": "e4dd301f-2938-4be2-bd87-19a0df56a4b9",
+      "event_type": "video_play",
+      "session_id": "sess_hwx3puxy0_1788476031257",
+      "created_at": "2026-09-03T23:22:01.308Z"
+    },
+    {
+      "id": "c97387b0-b35f-4da6-803a-cb589134f701",
+      "event_type": "page_view",
+      "session_id": "sess_hwx3puxy0_1788476031257",
+      "created_at": "2026-09-03T23:04:26.151Z"
+    },
+    {
+      "id": "924bc0ce-1a3a-40e8-9e8f-44c724489487",
+      "event_type": "video_play",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T23:04:04.181Z"
+    },
+    {
+      "id": "8d680cc3-5817-4e35-803c-d9b5f08b1b09",
+      "event_type": "page_view",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T23:03:54.588Z"
+    },
+    {
+      "id": "d540400a-c9e4-474e-b5e9-0a65c406b742",
+      "event_type": "video_play",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T23:00:26.114Z"
+    },
+    {
+      "id": "23b1442e-bbe2-41f9-9cb0-9c45a942e7b1",
+      "event_type": "video_play",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T23:00:01.486Z"
+    },
+    {
+      "id": "b7c2e4c3-38a5-42d4-8a17-df024800b8d6",
+      "event_type": "page_view",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T22:59:59.291Z"
+    },
+    {
+      "id": "134ea0f6-b973-4202-ab7a-b99c9e77d0c6",
+      "event_type": "video_play",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T22:58:15.284Z"
+    },
+    {
+      "id": "a4b05884-c68a-4105-9349-af54825be2d9",
+      "event_type": "page_view",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T22:58:13.036Z"
+    },
+    {
+      "id": "aaeaefeb-beba-47d2-ac70-e3f77ccb49be",
+      "event_type": "page_view",
+      "session_id": "sess_hwx3puxy0_1788476031257",
+      "created_at": "2026-09-03T22:54:13.131Z"
+    },
+    {
+      "id": "e40219e3-e1be-44f7-ad35-f19694584a4b",
+      "event_type": "video_play",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T22:53:11.347Z"
+    },
+    {
+      "id": "6cd15b19-1ad6-46b6-b79c-9c9f71e3ec15",
+      "event_type": "page_view",
+      "session_id": "sess_u05mlq5dt_1788475305254",
+      "created_at": "2026-09-03T22:42:07.140Z"
+    },
+    {
+      "id": "ae2d2bfd-deb5-4adf-9873-a7dd59e09427",
+      "event_type": "video_play",
+      "session_id": "test-session-123",
+      "created_at": "2026-09-03T22:41:30.958Z"
+    },
+    {
+      "id": "2c32e66f-dccb-4dcf-a6e4-98e510489b7a",
+      "event_type": "page_view",
+      "session_id": "test-session-123",
+      "created_at": "2026-09-03T22:41:27.442Z"
+    },
+    {
+      "id": "init-1",
+      "event_type": "page_view",
+      "session_id": "demo-init-session",
+      "created_at": "2026-09-03T21:39:30.903Z"
+    }
+  ],
+  "admin_auth": {
+    "username": "admin",
+    "salt": "8be5207c0a42c986655a4208d4bba058",
+    "password_hash": "7c90ac46e83d20f884327063bbd4237f82dc8eebe22b3e95e431d25491d250f84fd79cccfa9639fd7183beeb584e86a383a27a66fe4ddd943ce902074e8cea10",
+    "sessions": [
+      {
+        "token": "f73b02abf77ecca20fea7914b9bed36ab48bdf0f3eb8fe0a354f94169fc84e1d",
+        "expires_at": 1789080085636
+      },
+      {
+        "token": "d469539b8041a3f4da9444e58ed513d3fba88d1ae5eaf05de675a3ce7fa6c672",
+        "expires_at": 1789080092763
+      },
+      {
+        "token": "bfea08abbe11b535730d903cb54d3905f7324e9346efa3d9b6a85414fdfe41c8",
+        "expires_at": 1789080094815
+      },
+      {
+        "token": "955f6d499591cd2717537712fc57251f84acf36ed0ee8effea5c2d32cc870027",
+        "expires_at": 1789080866967
+      },
+      {
+        "token": "4e19991b6888a6c8f9b8c8e846adcf27896fec2481535aa2d83493177398c5a5",
+        "expires_at": 1789114799352
+      }
+    ]
+  }
+}

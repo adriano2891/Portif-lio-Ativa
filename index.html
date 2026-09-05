@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Landing Page de Vídeo</title>
+    <meta name="description" content="Landing Page profissional para reprodução de vídeos do Google Drive com área pública e painel administrativo protegido." />
+    <meta property="og:title" content="Landing Page de Vídeo" />
+    <meta property="og:description" content="Landing Page profissional para reprodução de vídeos do Google Drive com área pública e painel administrativo protegido." />
+    <meta property="og:type" content="video.other" />
+    <meta property="og:image" content="https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=1200&auto=format&fit=crop&q=80" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Landing Page de Vídeo" />
+    <meta name="twitter:description" content="Assista ao vídeo em destaque com alta qualidade." />
+    <meta name="theme-color" content="#090a0f" />
+    <link rel="icon" type="image/png" href="https://i.ibb.co/R4gxhsb1/Design-sem-nome-1.png" />
+    <link rel="apple-touch-icon" href="https://i.ibb.co/R4gxhsb1/Design-sem-nome-1.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Landing Page de Vídeo",
+        "description": "Reprodução de vídeo em destaque"
+      }
+    </script>
+    <script>
+      // Garante compatibilidade e proteção contra scripts ou polyfills de terceiros que tentem reatribuir window.fetch
+      (function() {
+        try {
+          var originalFetch = window.fetch;
+          var descriptor = Object.getOwnPropertyDescriptor(window, 'fetch') || 
+                           Object.getOwnPropertyDescriptor(Object.getPrototypeOf(window) || {}, 'fetch');
+          if (descriptor && (!descriptor.writable || !descriptor.set)) {
+            var currentFetch = originalFetch;
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return currentFetch; },
+              set: function(fn) { currentFetch = fn; },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {
+          console.warn('Proteção de fetch aplicada com aviso:', e);
+        }
+      })();
+    </script>
+  </head>
+  <body class="bg-[#090a0f] text-slate-100 antialiased min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,6 @@
+{
+  "name": "Landing Page de Vídeo",
+  "description": "Landing Page profissional para reprodução de vídeos do Google Drive com área pública e painel administrativo protegido.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
