@@ -398,6 +398,9 @@ async function startServer() {
       .replace(/<meta name="description" content=".*?" \/>/i, `<meta name="description" content="${description}" />`);
   }
 
+  // Servir arquivos estáticos públicos (ex: video.mp4, assets)
+  app.use(express.static(path.join(process.cwd(), 'public')));
+
   // --- VITE MIDDLEWARE (Dev) / STATIC (Prod) ---
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -408,8 +411,8 @@ async function startServer() {
     // Custom interceptor for HTML to provide dynamic OG tags even in dev
     app.use(async (req, res, next) => {
       // Let Vite handle non-HTML requests
-      const isHtmlRequest = req.headers.accept?.includes('text/html') || req.url === '/' || req.url === '/admin' || req.url.startsWith('/video');
-      if (!isHtmlRequest || req.url.startsWith('/api') || req.url.includes('.')) {
+      const isHtmlRequest = !req.url.includes('.') && (req.headers.accept?.includes('text/html') || req.url === '/' || req.url === '/admin');
+      if (!isHtmlRequest || req.url.startsWith('/api')) {
         return vite.middlewares(req, res, next);
       }
 

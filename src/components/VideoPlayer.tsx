@@ -109,21 +109,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const isVertical = effectiveRatio === '9-16';
 
-  // URLs de streaming direto do vídeo
-  const primaryStreamUrl = React.useMemo(() => {
-    if (originalUrl && (originalUrl.endsWith('.mp4') || originalUrl.endsWith('.webm') || originalUrl.endsWith('.mov'))) {
+  // URL de streaming/arquivo direto de vídeo para o player HTML5
+  const activeVideoSrc = React.useMemo(() => {
+    if (originalUrl && (originalUrl.endsWith('.mp4') || originalUrl.endsWith('.webm') || originalUrl.endsWith('.mov') || originalUrl.includes('/video.mp4'))) {
       return originalUrl;
     }
-    if (!resolvedFileId) return '';
-    if (isStaticOrNetlify) {
-      return `https://drive.usercontent.google.com/download?id=${resolvedFileId}&export=download&confirm=t`;
+    // No Netlify, modo estático ou com o vídeo padrão da landing page, usa o arquivo /video.mp4 local de alta performance
+    if (!resolvedFileId || resolvedFileId === '1imCug0lfQ1_R-VbGCLXMspYUzVH-5PuF' || isStaticOrNetlify) {
+      return '/video.mp4';
     }
-    return `${API_BASE}/api/public/video-stream/${resolvedFileId}`;
+    // Se houver backend próprio configurado
+    if (API_BASE) {
+      return `${API_BASE}/api/public/video-stream/${resolvedFileId}`;
+    }
+    return '/video.mp4';
   }, [originalUrl, resolvedFileId, isStaticOrNetlify]);
-
-  const fallbackDriveCdnUrl = resolvedFileId
-    ? `https://drive.usercontent.google.com/download?id=${resolvedFileId}&export=download&confirm=t`
-    : '';
 
   // Temporizador de Ocultação Automática dos Controles (3 segundos sem interação)
   const resetAutoHideTimer = useCallback(() => {
@@ -156,8 +156,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, []);
 
-  // Iniciar Reprodução
-  const handleStartPlay = () => {
+  // Iniciar Reprodução (Chamada síncrona dentro do gesto do usuário)
+  const handleStartPlay = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     setHasStarted(true);
     setStreamError(false);
     setIsVideoPaused(false);
@@ -167,28 +170,61 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onPlayRecorded();
     }
 
-    setTimeout(() => {
-      if (videoRef.current) {
-        videoRef.current.play().then(() => {
-          setIsVideoPaused(false);
-          resetAutoHideTimer();
-        }).catch((err) => {
-          console.warn('Autoplay bloqueado pelo navegador, aguardando toque:', err);
-          setIsVideoPaused(true);
-          setControlsVisible(true);
-        });
+    if (videoRef.current) {
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsVideoPaused(false);
+            resetAutoHideTimer();
+          })
+          .catch((err) => {
+            console.warn('Reprodução com som bloqueada na inicialização, tentando com mudo:', err);
+            if (videoRef.current) {
+              videoRef.current.muted = true;
+              setIsMuted(true);
+              videoRef.current.play()
+                .then(() => {
+                  setIsVideoPaused(false);
+                  resetAutoHideTimer();
+                })
+                .catch((err2) => {
+                  console.warn('Falha no HTML5, alternando para reprodutor do Drive:', err2);
+                  setPlayerMode('iframe');
+                });
+            }
+          });
       }
-    }, 100);
+    }
   };
 
   // Alternar Play/Pause
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
-      videoRef.current.play().then(() => {
-        setIsVideoPaused(false);
-        resetAutoHideTimer();
-      }).catch(console.warn);
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsVideoPaused(false);
+            resetAutoHideTimer();
+          })
+          .catch((err) => {
+            console.warn('Erro ao alternar reprodução:', err);
+            if (videoRef.current) {
+              videoRef.current.muted = true;
+              setIsMuted(true);
+              videoRef.current.play()
+                .then(() => {
+                  setIsVideoPaused(false);
+                  resetAutoHideTimer();
+                })
+                .catch(() => {
+                  setPlayerMode('iframe');
+                });
+            }
+          });
+      }
     } else {
       videoRef.current.pause();
       setIsVideoPaused(true);
@@ -316,19 +352,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  // Tratamento de Erro do Vídeo
+  // Tratamento de Erro do Vídeo (Fallback automático garantido)
   const handleVideoError = () => {
-    console.warn('Erro ao reproduzir stream primário. Tentando URL alternativa do Google Drive...');
-    if (videoRef.current && fallbackDriveCdnUrl) {
-      if (videoRef.current.src !== fallbackDriveCdnUrl) {
-        videoRef.current.src = fallbackDriveCdnUrl;
-        videoRef.current.load();
-        videoRef.current.play().catch(() => {});
-        return;
-      }
-    }
-    setStreamError(true);
-    setShowPermissionHelp(true);
+    console.warn('Erro ao reproduzir via HTML5. Ativando reprodutor seguro do Google Drive...');
+    setPlayerMode('iframe');
   };
 
   // Recarregar
@@ -413,112 +440,113 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             onPointerMove={resetAutoHideTimer}
             onTouchStart={resetAutoHideTimer}
           >
-            {!hasStarted ? (
-              /* Capa / Poster Interativo (antes de iniciar o vídeo) */
-              <div
-                onClick={handleStartPlay}
-                id="video-poster-overlay"
-                className="absolute inset-0 w-full h-full cursor-pointer flex flex-col items-center justify-center select-none bg-cover bg-center transition-transform duration-500"
-                style={{
-                  backgroundImage: normalizeImageUrl(coverImage)
-                    ? `linear-gradient(to top, rgba(2,13,23,0.75) 0%, rgba(2,13,23,0.25) 50%, rgba(2,13,23,0.75) 100%), url("${normalizeImageUrl(coverImage)}")`
-                    : 'linear-gradient(135deg, #020d17 0%, #052433 50%, #020d17 100%)',
-                }}
-              >
-                <div className="relative group/btn flex items-center justify-center">
-                  <div className="absolute -inset-3 bg-teal-500/30 rounded-full blur-md group-hover/btn:bg-teal-500/50 transition-all duration-300 animate-pulse" />
-                  <button
-                    id="btn-play-hero"
-                    aria-label="Iniciar reprodução do vídeo"
-                    className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-teal-600/95 text-white flex items-center justify-center pl-1 shadow-2xl border border-teal-300/40 transform transition-transform duration-300 group-hover/btn:scale-110 active:scale-95 hover:bg-teal-500"
+            {/* REPRODUTOR: Vídeo com Controles Estritamente no Rodapé */}
+            <div 
+              className="w-full h-full relative bg-black flex items-center justify-center"
+              onClick={handleVideoAreaClick}
+            >
+              {playerMode === 'stream' ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    key={`video-stream-${resolvedFileId}-${iframeKey}`}
+                    id="native-html5-player"
+                    src={activeVideoSrc}
+                    playsInline
+                    preload="auto"
+                    poster={normalizeImageUrl(coverImage) || undefined}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onTimeUpdate={handleTimeUpdate}
+                    onPlay={() => {
+                      setIsVideoPaused(false);
+                      resetAutoHideTimer();
+                    }}
+                    onPause={() => {
+                      setIsVideoPaused(true);
+                      setControlsVisible(true);
+                      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+                    }}
+                    onEnded={() => {
+                      setIsVideoPaused(true);
+                      setControlsVisible(true);
+                    }}
+                    onError={handleVideoError}
+                    className="w-full h-full bg-black object-contain cursor-pointer"
                   >
-                    <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-white" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* REPRODUTOR ATIVO: Vídeo com Controles Estritamente no Rodapé */
-              <div 
-                className="w-full h-full relative bg-black flex items-center justify-center"
-                onClick={handleVideoAreaClick}
-              >
-                {playerMode === 'stream' ? (
-                  <>
-                    <video
-                      ref={videoRef}
-                      key={`video-stream-${resolvedFileId}-${iframeKey}`}
-                      id="native-html5-player"
-                      playsInline
-                      preload="metadata"
-                      poster={normalizeImageUrl(coverImage) || undefined}
-                      onLoadedMetadata={handleLoadedMetadata}
-                      onTimeUpdate={handleTimeUpdate}
-                      onPlay={() => {
-                        setIsVideoPaused(false);
-                        resetAutoHideTimer();
-                      }}
-                      onPause={() => {
-                        setIsVideoPaused(true);
-                        setControlsVisible(true);
-                        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-                      }}
-                      onEnded={() => {
-                        setIsVideoPaused(true);
-                        setControlsVisible(true);
-                      }}
-                      onError={handleVideoError}
-                      className="w-full h-full bg-black object-contain cursor-pointer"
-                    >
-                      {primaryStreamUrl && <source src={primaryStreamUrl} type="video/mp4" />}
-                      {fallbackDriveCdnUrl && <source src={fallbackDriveCdnUrl} type="video/mp4" />}
-                      Seu navegador não suporta reprodução direta de vídeo.
-                    </video>
+                    <source src={activeVideoSrc} type="video/mp4" />
+                    <source src="/video.mp4" type="video/mp4" />
+                    Seu navegador não suporta reprodução direta de vídeo.
+                  </video>
 
-                    {/* Controles Customizados: Somente na Parte Inferior com Degradê e Ocultação Automática */}
-                    <VideoControls
-                      isPlaying={!isVideoPaused}
-                      onTogglePlay={togglePlay}
-                      visible={controlsVisible}
-                      currentTime={currentTime}
-                      duration={duration}
-                      bufferedEnd={bufferedEnd}
-                      volume={volume}
-                      isMuted={isMuted}
-                      playbackRate={playbackRate}
-                      onSeek={handleSeek}
-                      onVolumeChange={handleVolumeChange}
-                      onToggleMute={handleToggleMute}
-                      onPlaybackRateChange={handlePlaybackRateChange}
-                      isFullscreen={isFullscreen}
-                      onToggleFullscreen={handleToggleFullscreen}
-                      onSkip={handleSkip}
-                    />
-                  </>
-                ) : (
-                  /* Modo Iframe alternativo (se acionado manualmente em testes) */
-                  <>
-                    <iframe
-                      key={`iframe-drive-${iframeKey}`}
-                      id="google-drive-iframe"
-                      src={previewUrl}
-                      title={title || 'Vídeo do Google Drive'}
-                      className="w-full h-full border-0 absolute inset-0"
-                      allow="autoplay; fullscreen; encrypted-media"
-                      allowFullScreen
-                    />
-                    <div
-                      id="block-drive-popout"
-                      className="absolute top-0 right-0 w-20 h-16 bg-black z-20 pointer-events-auto cursor-default select-none rounded-tr-xl md:rounded-tr-2xl"
-                      aria-hidden="true"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                      }}
-                    />
-                  </>
-                )}
-              </div>
-            )}
+                  {/* Controles Customizados: Somente na Parte Inferior com Degradê e Ocultação Automática */}
+                  <VideoControls
+                    isPlaying={!isVideoPaused}
+                    onTogglePlay={togglePlay}
+                    visible={hasStarted && controlsVisible}
+                    currentTime={currentTime}
+                    duration={duration}
+                    bufferedEnd={bufferedEnd}
+                    volume={volume}
+                    isMuted={isMuted}
+                    playbackRate={playbackRate}
+                    onSeek={handleSeek}
+                    onVolumeChange={handleVolumeChange}
+                    onToggleMute={handleToggleMute}
+                    onPlaybackRateChange={handlePlaybackRateChange}
+                    isFullscreen={isFullscreen}
+                    onToggleFullscreen={handleToggleFullscreen}
+                    onSkip={handleSkip}
+                  />
+                </>
+              ) : (
+                /* Modo Iframe alternativo (se acionado automaticamente por fallback de segurança) */
+                <>
+                  <iframe
+                    key={`iframe-drive-${iframeKey}`}
+                    id="google-drive-iframe"
+                    src={`${previewUrl}?autoplay=1`}
+                    title={title || 'Vídeo do Google Drive'}
+                    className="w-full h-full border-0 absolute inset-0"
+                    allow="autoplay; fullscreen; encrypted-media"
+                    allowFullScreen
+                  />
+                  <div
+                    id="block-drive-popout"
+                    className="absolute top-0 right-0 w-20 h-16 bg-black z-20 pointer-events-auto cursor-default select-none rounded-tr-xl md:rounded-tr-2xl"
+                    aria-hidden="true"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Capa / Poster Interativo (antes de iniciar o vídeo) */}
+              {!hasStarted && (
+                <div
+                  onClick={handleStartPlay}
+                  id="video-poster-overlay"
+                  className="absolute inset-0 z-30 w-full h-full cursor-pointer flex flex-col items-center justify-center select-none bg-cover bg-center transition-opacity duration-300"
+                  style={{
+                    backgroundImage: normalizeImageUrl(coverImage)
+                      ? `linear-gradient(to top, rgba(2,13,23,0.75) 0%, rgba(2,13,23,0.25) 50%, rgba(2,13,23,0.75) 100%), url("${normalizeImageUrl(coverImage)}")`
+                      : 'linear-gradient(135deg, #020d17 0%, #052433 50%, #020d17 100%)',
+                  }}
+                >
+                  <div className="relative group/btn flex items-center justify-center">
+                    <div className="absolute -inset-3 bg-teal-500/30 rounded-full blur-md group-hover/btn:bg-teal-500/50 transition-all duration-300 animate-pulse" />
+                    <button
+                      id="btn-play-hero"
+                      aria-label="Iniciar reprodução do vídeo"
+                      className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-teal-600/95 text-white flex items-center justify-center pl-1 shadow-2xl border border-teal-300/40 transform transition-transform duration-300 group-hover/btn:scale-110 active:scale-95 hover:bg-teal-500"
+                    >
+                      <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-white" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Asa Lateral Direita (Smart TVs e Desktops) */}
@@ -557,31 +585,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         >
           <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/20 via-sky-500/10 to-indigo-500/20 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition duration-1000 -z-10" />
 
-          {!hasStarted ? (
-            /* Poster Interativo com botão de Play */
-            <div 
-              onClick={handleStartPlay}
-              id="video-poster-overlay"
-              className="absolute inset-0 w-full h-full cursor-pointer flex flex-col items-center justify-center select-none bg-cover bg-center transition-transform duration-500"
-              style={{
-                backgroundImage: normalizeImageUrl(coverImage)
-                  ? `linear-gradient(to top, rgba(9,10,15,0.85) 0%, rgba(9,10,15,0.4) 50%, rgba(9,10,15,0.85) 100%), url("${normalizeImageUrl(coverImage)}")`
-                  : 'linear-gradient(135deg, #0f172a 0%, #062534 50%, #090a0f 100%)',
-              }}
-            >
-              <div className="relative group/btn flex items-center justify-center">
-                <div className="absolute -inset-3 bg-teal-500/30 rounded-full blur-md group-hover/btn:bg-teal-500/50 transition-all duration-300 animate-pulse" />
-                <button
-                  id="btn-play-hero"
-                  aria-label="Iniciar reprodução do vídeo"
-                  className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-teal-600/90 text-white flex items-center justify-center pl-1 shadow-2xl border border-teal-400/40 transform transition-transform duration-300 group-hover/btn:scale-110 active:scale-95 hover:bg-teal-500"
-                >
-                  <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-white" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* REPRODUTOR ATIVO: Controles Somente no Rodapé */
+            {/* REPRODUTOR ATIVO: Controles Somente no Rodapé */}
             <div 
               className="w-full h-full relative bg-black flex items-center justify-center"
               onClick={handleVideoAreaClick}
@@ -592,8 +596,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     ref={videoRef}
                     key={`video-stream-${resolvedFileId}-${iframeKey}`}
                     id="native-html5-player"
+                    src={activeVideoSrc}
                     playsInline
-                    preload="metadata"
+                    preload="auto"
                     poster={normalizeImageUrl(coverImage) || undefined}
                     onLoadedMetadata={handleLoadedMetadata}
                     onTimeUpdate={handleTimeUpdate}
@@ -615,8 +620,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       videoFit === 'cover' ? 'object-cover' : 'object-contain'
                     }`}
                   >
-                    {primaryStreamUrl && <source src={primaryStreamUrl} type="video/mp4" />}
-                    {fallbackDriveCdnUrl && <source src={fallbackDriveCdnUrl} type="video/mp4" />}
+                    <source src={activeVideoSrc} type="video/mp4" />
+                    <source src="/video.mp4" type="video/mp4" />
                     Seu navegador não suporta reprodução direta de vídeo.
                   </video>
 
@@ -624,7 +629,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   <VideoControls
                     isPlaying={!isVideoPaused}
                     onTogglePlay={togglePlay}
-                    visible={controlsVisible}
+                    visible={hasStarted && controlsVisible}
                     currentTime={currentTime}
                     duration={duration}
                     bufferedEnd={bufferedEnd}
@@ -645,7 +650,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   <iframe
                     key={`iframe-drive-${iframeKey}`}
                     id="google-drive-iframe"
-                    src={previewUrl}
+                    src={`${previewUrl}?autoplay=1`}
                     title={title || 'Vídeo do Google Drive'}
                     className="w-full h-full border-0 absolute inset-0"
                     allow="autoplay; fullscreen; encrypted-media"
@@ -662,8 +667,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   />
                 </>
               )}
+
+              {/* Poster Interativo com botão de Play */}
+              {!hasStarted && (
+                <div 
+                  onClick={handleStartPlay}
+                  id="video-poster-overlay"
+                  className="absolute inset-0 z-30 w-full h-full cursor-pointer flex flex-col items-center justify-center select-none bg-cover bg-center transition-opacity duration-300"
+                  style={{
+                    backgroundImage: normalizeImageUrl(coverImage)
+                      ? `linear-gradient(to top, rgba(9,10,15,0.85) 0%, rgba(9,10,15,0.4) 50%, rgba(9,10,15,0.85) 100%), url("${normalizeImageUrl(coverImage)}")`
+                      : 'linear-gradient(135deg, #0f172a 0%, #062534 50%, #090a0f 100%)',
+                  }}
+                >
+                  <div className="relative group/btn flex items-center justify-center">
+                    <div className="absolute -inset-3 bg-teal-500/30 rounded-full blur-md group-hover/btn:bg-teal-500/50 transition-all duration-300 animate-pulse" />
+                    <button
+                      id="btn-play-hero"
+                      aria-label="Iniciar reprodução do vídeo"
+                      className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-teal-600/90 text-white flex items-center justify-center pl-1 shadow-2xl border border-teal-400/40 transform transition-transform duration-300 group-hover/btn:scale-110 active:scale-95 hover:bg-teal-500"
+                    >
+                      <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-white" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
         </div>
       )}
 
